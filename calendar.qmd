@@ -1,0 +1,120 @@
+---
+title: ""
+format:
+  pdf:
+    geometry: margin=0.6in
+execute:
+  echo: false
+  message: false
+  warning: false
+---
+
+```{r,fig.width=8,fig.height=11}
+YEAR <- 2026
+
+# Monday-based day-of-week: 1..7 for Mon..Sun
+dow_mon1 <- function(d) ((as.POSIXlt(d)$wday + 6) %% 7) + 1
+dow_sun1 <- function(d) as.POSIXlt(d)$wday + 1
+
+draw_4month_page <- function(year, month_start) {
+  first <- as.Date(sprintf("%04d-%02d-01", year, month_start))
+
+  # end of 4-month span
+  m_end <- month_start + 3
+  y_end <- year + (m_end - 1) %/% 12
+  m_end <- ((m_end - 1) %% 12) + 1
+  last  <- as.Date(format(as.Date(sprintf("%04d-%02d-01", y_end, m_end)) + 35, "%Y-%m-01")) - 1
+
+  # pad to full weeks (Mon..Sun)
+  start <- first - (dow_sun1(first) - 1)
+  end   <- last  + (7 - dow_sun1(last))
+  dates <- seq(start, end, by = "day")
+
+  week_id <- (as.integer(dates) - as.integer(start)) %/% 7 + 1
+  weeks <- split(dates, week_id)
+  nweek <- length(weeks)
+
+  # --- make the month-label column narrower ---
+  w8 <- 0.55                 # width of the month-label column (try 0.4–0.7)
+  x8_left  <- 7.5
+  x8_right <- 7.5 + w8
+  x8_mid   <- (x8_left + x8_right) / 2
+
+  plot.new()
+  # 7 day columns (fixed) + narrower month-label column
+  plot.window(xlim = c(0.5, x8_right), ylim = c(0.5, nweek + 2.2), xaxs = "i", yaxs = "i")
+
+
+
+  # Header row (tight)
+  dows <- c("Sun","Mon","Tue","Wed","Thu","Fri","Sat")
+  for (d in 1:7) text(d, nweek + .85, dows[d], cex = 2,font=2)
+
+
+  # Build which week-rows belong to which month within the 4-month span
+  month_rows <- vector("list", 12)
+  for (r in 1:nweek) {
+    week <- weeks[[r]]
+    # within-range days (inside the 4-month window)
+    in_range <- week >= first & week <= last
+    if (any(in_range)) {
+      ms <- as.integer(format(week[in_range], "%m"))
+      # assign this row to the month that appears most in that week
+      m <- as.integer(names(sort(table(ms), decreasing = TRUE))[1])
+      month_rows[[m]] <- c(month_rows[[m]], r)
+    }
+  }
+
+  # Draw day grid (7 cols) + extra label col (narrow col 8)
+  for (r in 1:nweek) {
+    y <- nweek - r + 1
+    week <- weeks[[r]]
+
+    for (d in 1:7) {
+      day <- week[d]
+      in_range <- (day >= first && day <= last)
+
+      if (!in_range) {
+        fill <- "white"; label <- ""
+      } else {
+        m <- as.integer(format(day, "%m"))
+        fill <- if (((m - month_start) %% 2) == 1) "grey92" else "white"
+        label <- sprintf("%d", as.integer(format(day, "%d")))
+      }
+
+      rect(d - 0.5, y - 0.5, d + 0.5, y + 0.5, col = fill, border = "black", lwd = 0.7)
+      if (nzchar(label)) text(d + 0.45, y + 0.32, label, adj = c(1, 1), cex = 1.5)
+    }
+
+    # column 8 background only (no row lines)
+    rect(x8_left, y - 0.5, x8_right, y + 0.5, col = "white", border = NA)
+  }
+  
+
+
+  # Merge-ish month label blocks in column 8 (one per month in this 4-month span)
+  months_in_page <- ((month_start - 1 + 0:3) %% 12) + 1
+  for (m in months_in_page) {
+    rows <- month_rows[[m]]
+    if (length(rows) == 0) next
+
+    top_r <- min(rows)
+    bot_r <- max(rows)
+
+    y_top <- nweek - top_r + 1 + 0.5
+    y_bot <- nweek - bot_r + 1 - 0.5
+
+    # outline block (only these borders remain in the last column)
+    rect(x8_left, y_bot, x8_right, y_top, col = "white", border = "white", lwd = 1.2)
+
+    #month label white box covers up border at end of calendar so redraw it
+    segments(x8_left, y_bot, x8_left, y_top)
+
+    # big bold month label centered in the merged block (rotated)
+    text(x8_mid, (y_top + y_bot)/2, paste(substr(month.name[m], 1, 3),YEAR), font = 2, cex = 2.0, srt = 90)
+  }
+}
+
+par(mar = c(0.5, 0.5, 0.7, 0.5))
+for (m0 in c(1, 5, 9)) draw_4month_page(YEAR, m0)
+```
